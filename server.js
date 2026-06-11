@@ -202,8 +202,14 @@ function moveBlob(b) {
       b.targetY = cmd.targetY;
       b.attackTarget = cmd.attackTarget;
       b.attackMove = cmd.attackMove;
+      // Re-resolve attack target position
+      if (b.attackTarget !== null) {
+        const target = blobs.find(t => t.id === b.attackTarget && t.alive);
+        if (target) { b.targetX = target.x; b.targetY = target.y; }
+        else { b.attackTarget = null; }
+      }
     }
-    return;
+    if (b.targetX === null) return;
   }
 
   const dx = b.targetX - b.x;
@@ -533,8 +539,8 @@ function handleCommand(ws, msg) {
         const b = blobs.find(bl => bl.id === id);
         if (!b) continue;
         const cmd = {
-          targetX: null,
-          targetY: null,
+          targetX: target.x,
+          targetY: target.y,
           attackTarget: targetId,
           attackMove: false,
         };
@@ -542,6 +548,8 @@ function handleCommand(ws, msg) {
           b.commandQueue.push(cmd);
         } else {
           b.commandQueue = [];
+          b.targetX = target.x;
+          b.targetY = target.y;
           b.attackTarget = targetId;
           b.attackMove = false;
         }
