@@ -1,5 +1,7 @@
 # Blob RTS
 
+![Blob RTS](blob.png)
+
 A multiplayer browser-based RTS where you control blob units that eat enemies and NPCs to grow bigger and stronger. Destroy all enemy bases and units to win.
 
 ## How to Play
