@@ -20,8 +20,8 @@ const BASE_RADIUS = 40;
 const BABY_SIZE = 8;
 const SPAWN_INTERVAL = 3000;
 const MAX_UNITS_PER_TEAM = 50;
-const NPC_COUNT = 40;
-const NPC_RESPAWN_INTERVAL = 8000;
+const NPC_COUNT = 80;
+const NPC_RESPAWN_INTERVAL = 6000;
 const BLOB_MIN_SPEED = 0.6;
 const BLOB_MAX_SPEED = 2.5;
 const TEAM_NPC = -1;
@@ -71,13 +71,31 @@ function createBase(x, y, team) {
   return { x, y, team, spawnTimer: 0, alive: true, hp: 500, maxHp: 500 };
 }
 
+let gameOver = false;
+let restartTimer = 0;
+const RESTART_DELAY = 5000; // ms before auto-restart
+
 function resetGame() {
   blobs = [];
   bases = [];
   events = [];
   nextBlobId = 0;
   npcRespawnTimer = 0;
+  gameOver = false;
+  restartTimer = 0;
   spawnNPCs(NPC_COUNT);
+}
+
+function restartGame() {
+  resetGame();
+  // Respawn all connected players
+  for (const [ws, player] of players) {
+    const team = player.team;
+    player.alive = true;
+    spawnPlayer(team);
+    ws.send(JSON.stringify({ type: 'restart', team }));
+  }
+  console.log(`Game restarted with ${players.size} players`);
 }
 
 function spawnNPCs(count) {
@@ -92,7 +110,7 @@ function spawnNPCs(count) {
       if (Math.hypot(x - base.x, y - base.y) < 200) { tooClose = true; break; }
     }
     if (tooClose) continue;
-    const size = rand(6, 22);
+    const size = rand(4, 14);
     blobs.push(createBlob(x, y, size, TEAM_NPC));
     i++;
   }
@@ -363,9 +381,19 @@ function tick(dt) {
   for (const b of blobs) {
     if (b.team !== TEAM_NPC) aliveTeams.add(b.team);
   }
-  if (players.size >= 2 && aliveTeams.size === 1) {
+  if (players.size >= 2 && aliveTeams.size === 1 && !gameOver) {
     const winner = [...aliveTeams][0];
     events.push({ type: 'victory', team: winner });
+    gameOver = true;
+    restartTimer = 0;
+  }
+
+  // Auto-restart after game over
+  if (gameOver) {
+    restartTimer += dt;
+    if (restartTimer >= RESTART_DELAY) {
+      restartGame();
+    }
   }
 }
 

@@ -242,6 +242,14 @@ function handleServerMessage(msg) {
     case 'playerLeft':
       totalPlayers = msg.totalPlayers;
       break;
+
+    case 'restart':
+      selected.clear();
+      particles = [];
+      eliminated = false;
+      hasCentered = false;
+      overlay.style.display = 'none';
+      break;
   }
 }
 
