@@ -108,6 +108,7 @@ let connected = false;
 let eliminated = false;
 let totalPlayers = 0;
 let ws = null;
+let controlGroups = {}; // key: '0'-'9', value: Set of blob ids
 
 // --- Resize ---
 function resize() {
@@ -612,6 +613,48 @@ minimapCanvas.addEventListener('contextmenu', function(e) { e.preventDefault(); 
 
 window.addEventListener('keydown', function(e) {
   keysDown.add(e.key);
+
+  // Control groups: 0-9
+  // Use e.code (e.g. 'Digit1') since e.key changes with Shift (e.g. '!' instead of '1')
+  var digitMatch = e.code && e.code.match(/^Digit(\d)$/);
+  if (digitMatch) {
+    var num = digitMatch[1];
+    if (e.ctrlKey && e.shiftKey) {
+      // Ctrl+Shift+#: create group from selection, steal from other groups
+      e.preventDefault();
+      for (var g in controlGroups) { if (g !== num) { var toRemove = []; controlGroups[g].forEach(function(id) { if (selected.has(id)) toRemove.push(id); }); toRemove.forEach(function(id) { controlGroups[g].delete(id); }); } }
+      controlGroups[num] = new Set(selected);
+    } else if (e.altKey && e.shiftKey) {
+      // Shift+Alt+#: steal selected from other groups and add to this group
+      e.preventDefault();
+      if (!controlGroups[num]) controlGroups[num] = new Set();
+      for (var g in controlGroups) { if (g !== num) { var toRemove = []; controlGroups[g].forEach(function(id) { if (selected.has(id)) toRemove.push(id); }); toRemove.forEach(function(id) { controlGroups[g].delete(id); }); } }
+      selected.forEach(function(id) { controlGroups[num].add(id); });
+    } else if (e.ctrlKey) {
+      // Ctrl+#: create/overwrite group from selection
+      e.preventDefault();
+      controlGroups[num] = new Set(selected);
+    } else if (e.shiftKey) {
+      // Shift+#: add selection to group
+      e.preventDefault();
+      if (!controlGroups[num]) controlGroups[num] = new Set();
+      selected.forEach(function(id) { controlGroups[num].add(id); });
+    } else if (e.altKey) {
+      // Alt+#: steal selected from other groups, put in this group (overwrite)
+      e.preventDefault();
+      for (var g in controlGroups) { if (g !== num) { var toRemove = []; controlGroups[g].forEach(function(id) { if (selected.has(id)) toRemove.push(id); }); toRemove.forEach(function(id) { controlGroups[g].delete(id); }); } }
+      controlGroups[num] = new Set(selected);
+    } else {
+      // Just #: recall group
+      if (controlGroups[num] && controlGroups[num].size > 0) {
+        // Clean dead/missing ids
+        var validIds = new Set(blobs.filter(function(b) { return b.team === myTeam; }).map(function(b) { return b.id; }));
+        controlGroups[num].forEach(function(id) { if (!validIds.has(id)) controlGroups[num].delete(id); });
+        selected = new Set(controlGroups[num]);
+      }
+    }
+    return;
+  }
 
   if (e.key === 'a' && !e.ctrlKey && selected.size > 0) {
     attackMoveMode = true;

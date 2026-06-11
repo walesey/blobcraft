@@ -13,3 +13,22 @@ Please add blob collisions so that blobs can't overlap
 Please add a multiplayer server so that instead of AI opponents I can have players join my 
 IP and get spawned into the game world as they join the server.
 
+
+Please add to the server, if the game ends, the server should automatically start a 
+fresh game and respawn any connected players and allow new players to join.
+
+
+Let's change the rules for npc's, they should be easier to beat for the player so that we don't end up with players unable to farm efficiently.
+
+
+Let's make it so that this npc debuff is a configurable value in a config file.
+
+
+Let's implement a slight combat multiplier bonus when blobs have other blobs nearby in a group. 
+So that bigger goups of blobs will gain a numbers advantage, 
+this way 1 massive blob will be less stong vs a large group of tiny blobs, 
+effectively giving the large group of smaller blobs an advantage against a large blob that isn't backed up by smaller blobs also. 
+Please also implement a graphical indication of this stacking group buff state.
+
+
+Please add control groups. ctrl-1 to create group, shift-# add to group, alt-# steal to new group, shift-alt-# steal and add to group, etc.

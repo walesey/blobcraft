@@ -16,6 +16,15 @@ A multiplayer browser-based RTS where you control blob units that eat enemies an
 - **Pan camera**: Arrow keys or move mouse to screen edges
 - **Minimap**: Click the minimap (bottom-right) to jump the camera
 
+### Control Groups
+
+- **Ctrl+0–9**: Assign selected units to a group
+- **0–9**: Recall a group (select those units)
+- **Shift+0–9**: Add selected units to a group
+- **Alt+0–9**: Steal selected units from other groups and assign to this group
+- **Shift+Alt+0–9**: Steal selected units from other groups and add to this group
+- **Ctrl+Shift+0–9**: Assign to group and remove those units from all other groups
+
 ## Mechanics
 
 - Your base spawns a baby blob every 3 seconds (max 50 units)
