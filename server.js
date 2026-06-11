@@ -239,12 +239,12 @@ function resolveCombat(a, b) {
     a.size = areaToSize(aArea + bArea * 0.8);
     b.alive = false;
     events.push({ type: 'kill', x: b.x, y: b.y, team: b.team });
-    a.combatCooldown = 15;
+    a.combatCooldown = config.combatCooldown || 15;
   } else {
     b.size = areaToSize(bArea + aArea * 0.8);
     a.alive = false;
     events.push({ type: 'kill', x: a.x, y: a.y, team: a.team });
-    b.combatCooldown = 15;
+    b.combatCooldown = config.combatCooldown || 15;
   }
 }
 
@@ -254,7 +254,7 @@ function attackBase(blob, base) {
   if (d < BASE_RADIUS + blob.size) {
     if (blob.combatCooldown <= 0) {
       base.hp -= blob.size * 0.5;
-      blob.combatCooldown = 30;
+      blob.combatCooldown = config.baseCombatCooldown || 30;
       events.push({ type: 'baseHit', x: base.x + rand(-20, 20), y: base.y + rand(-20, 20), team: base.team });
       if (base.hp <= 0) {
         base.alive = false;

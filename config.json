@@ -2,5 +2,7 @@
   "npcCombatDisadvantage": 1.0,
   "groupBonusPerAlly": 0.1,
   "groupBonusRadius": 80,
-  "groupBonusMax": 2.0
+  "groupBonusMax": 2.0,
+  "combatCooldown": 15,
+  "baseCombatCooldown": 30
 }

@@ -71,6 +71,10 @@ Blobs near friendly allies gain a combat bonus. Each same-team blob within range
 
 Blobs with an active group bonus display a glowing ring and a `+N` indicator above them showing the stack count.
 
+### Combat Cooldowns
+
+After a blob eats another blob, it enters a cooldown period during which it cannot fight again. This prevents a single blob from instantly chain-eating an entire group. The cooldown is measured in server ticks (30 ticks per second), so the default `combatCooldown` of 15 means ~500ms between kills. A separate `baseCombatCooldown` controls how often blobs can damage enemy bases.
+
 ## Configuration
 
 Edit `config.json` to tune game balance:
@@ -80,7 +84,9 @@ Edit `config.json` to tune game balance:
   "npcCombatDisadvantage": 1.0,
   "groupBonusPerAlly": 0.1,
   "groupBonusRadius": 80,
-  "groupBonusMax": 2.0
+  "groupBonusMax": 2.0,
+  "combatCooldown": 15,
+  "baseCombatCooldown": 30
 }
 ```
 
@@ -90,3 +96,5 @@ Edit `config.json` to tune game balance:
 | `groupBonusPerAlly` | Combat multiplier added per nearby same-team blob (e.g. `0.1` = +10% per ally). | `0.1` |
 | `groupBonusRadius` | How close (in world units) allies must be to count for the group bonus. | `80` |
 | `groupBonusMax` | Maximum total group bonus multiplier. Caps the stacking so very large groups don't become invincible. | `2.0` |
+| `combatCooldown` | Ticks before a blob can fight again after eating another blob (30 ticks/sec). | `15` (~500ms) |
+| `baseCombatCooldown` | Ticks before a blob can damage an enemy base again. | `30` (~1s) |
