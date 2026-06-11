@@ -640,10 +640,11 @@ canvas.addEventListener('contextmenu', function(e) {
   const queue = e.shiftKey;
 
   let target = null;
+  let friendly = null;
   for (const b of blobs) {
-    if (b.team !== myTeam && Math.hypot(b.x - wx, b.y - wy) < b.size + 5) {
-      target = b;
-      break;
+    if (Math.hypot(b.x - wx, b.y - wy) < b.size + 5) {
+      if (b.team !== myTeam) { target = b; break; }
+      else if (!selected.has(b.id)) { friendly = b; }
     }
   }
 
@@ -659,6 +660,8 @@ canvas.addEventListener('contextmenu', function(e) {
     send({ type: 'attack', ids: Array.from(selected), targetId: target.id, queue: queue });
   } else if (targetBase) {
     send({ type: 'attackMove', ids: Array.from(selected), x: targetBase.x, y: targetBase.y, queue: queue });
+  } else if (friendly) {
+    send({ type: 'follow', ids: Array.from(selected), targetId: friendly.id, queue: queue });
   } else {
     send({ type: 'move', ids: Array.from(selected), x: wx, y: wy, queue: queue });
   }

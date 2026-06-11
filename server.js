@@ -61,6 +61,7 @@ function createBlob(x, y, size, team) {
     x, y, size, team,
     targetX: null, targetY: null,
     attackTarget: null,
+    followTarget: null,
     attackMove: false,
     alive: true,
     combatCooldown: 0,
@@ -194,6 +195,17 @@ function moveBlob(b) {
     }
   }
 
+  // Follow a friendly blob
+  if (b.followTarget !== null && b.attackTarget === null) {
+    const leader = blobs.find(t => t.id === b.followTarget);
+    if (!leader || !leader.alive) {
+      b.followTarget = null;
+    } else {
+      b.targetX = leader.x;
+      b.targetY = leader.y;
+    }
+  }
+
   if (b.targetX === null) {
     // Dequeue next command if available
     if (b.commandQueue.length > 0) {
@@ -201,12 +213,19 @@ function moveBlob(b) {
       b.targetX = cmd.targetX;
       b.targetY = cmd.targetY;
       b.attackTarget = cmd.attackTarget;
+      b.followTarget = cmd.followTarget || null;
       b.attackMove = cmd.attackMove;
       // Re-resolve attack target position
       if (b.attackTarget !== null) {
         const target = blobs.find(t => t.id === b.attackTarget && t.alive);
         if (target) { b.targetX = target.x; b.targetY = target.y; }
         else { b.attackTarget = null; }
+      }
+      // Re-resolve follow target position
+      if (b.followTarget !== null) {
+        const leader = blobs.find(t => t.id === b.followTarget && t.alive);
+        if (leader) { b.targetX = leader.x; b.targetY = leader.y; }
+        else { b.followTarget = null; }
       }
     }
     if (b.targetX === null) return;
@@ -218,6 +237,10 @@ function moveBlob(b) {
   const speed = blobSpeed(b.size);
 
   if (d < 2) {
+    // If following, don't clear — just stay near the leader
+    if (b.followTarget !== null) {
+      return;
+    }
     b.targetX = null;
     b.targetY = null;
     if (b.attackMove) {
@@ -524,6 +547,7 @@ function handleCommand(ws, msg) {
           b.targetX = cmd.targetX;
           b.targetY = cmd.targetY;
           b.attackTarget = null;
+          b.followTarget = null;
           b.attackMove = false;
         }
       }
@@ -551,6 +575,7 @@ function handleCommand(ws, msg) {
           b.targetX = target.x;
           b.targetY = target.y;
           b.attackTarget = targetId;
+          b.followTarget = null;
           b.attackMove = false;
         }
       }
@@ -578,6 +603,7 @@ function handleCommand(ws, msg) {
           b.targetX = cmd.targetX;
           b.targetY = cmd.targetY;
           b.attackTarget = null;
+          b.followTarget = null;
           b.attackMove = true;
         }
       }
@@ -591,8 +617,37 @@ function handleCommand(ws, msg) {
         b.targetX = null;
         b.targetY = null;
         b.attackTarget = null;
+        b.followTarget = null;
         b.attackMove = false;
         b.commandQueue = [];
+      }
+      break;
+    }
+    case 'follow': {
+      const targetId = Number(msg.targetId);
+      const target = blobs.find(b => b.id === targetId && b.alive && b.team === team);
+      if (!target) return;
+      const ids = (msg.ids || []).filter(id => ownedIds.has(id) && id !== targetId);
+      const queue = !!msg.queue;
+      for (const id of ids) {
+        const b = blobs.find(bl => bl.id === id);
+        if (!b) continue;
+        if (queue) {
+          b.commandQueue.push({
+            targetX: target.x,
+            targetY: target.y,
+            attackTarget: null,
+            followTarget: targetId,
+            attackMove: false,
+          });
+        } else {
+          b.commandQueue = [];
+          b.targetX = target.x;
+          b.targetY = target.y;
+          b.attackTarget = null;
+          b.followTarget = targetId;
+          b.attackMove = false;
+        }
       }
       break;
     }
