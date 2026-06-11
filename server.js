@@ -22,8 +22,6 @@ const BASE_RADIUS = 40;
 const BABY_SIZE = 8;
 const SPAWN_INTERVAL = 3000;
 const MAX_UNITS_PER_TEAM = 50;
-const NPC_COUNT = 80;
-const NPC_RESPAWN_INTERVAL = 6000;
 const BLOB_MIN_SPEED = 0.6;
 const BLOB_MAX_SPEED = 2.5;
 const TEAM_NPC = -1;
@@ -85,7 +83,7 @@ function resetGame() {
   npcRespawnTimer = 0;
   gameOver = false;
   restartTimer = 0;
-  spawnNPCs(NPC_COUNT);
+  spawnNPCs(config.npcMaxCount || 80);
 }
 
 function restartGame() {
@@ -101,8 +99,15 @@ function restartGame() {
 }
 
 function spawnNPCs(count) {
+  const npcMax = config.npcMaxCount || 80;
   const existing = blobs.filter(b => b.team === TEAM_NPC && b.alive).length;
-  const toSpawn = Math.min(count, NPC_COUNT - existing);
+  const toSpawn = Math.min(count, npcMax - existing);
+  const tiers = config.npcSizeTiers || [
+    { weight: 0.60, min: 4, max: 12 },
+    { weight: 0.25, min: 12, max: 22 },
+    { weight: 0.12, min: 22, max: 35 },
+    { weight: 0.03, min: 35, max: 55 },
+  ];
   let attempts = 0;
   for (let i = 0; i < toSpawn && attempts < toSpawn * 5; attempts++) {
     const x = rand(100, WORLD_W - 100);
@@ -112,7 +117,18 @@ function spawnNPCs(count) {
       if (Math.hypot(x - base.x, y - base.y) < 200) { tooClose = true; break; }
     }
     if (tooClose) continue;
-    const size = rand(4, 14);
+    // Pick size from weighted tiers
+    let size;
+    const roll = Math.random();
+    let cumulative = 0;
+    for (const tier of tiers) {
+      cumulative += tier.weight;
+      if (roll < cumulative) {
+        size = rand(tier.min, tier.max);
+        break;
+      }
+    }
+    if (size === undefined) size = rand(tiers[0].min, tiers[0].max);
     blobs.push(createBlob(x, y, size, TEAM_NPC));
     i++;
   }
@@ -407,9 +423,9 @@ function tick(dt) {
 
   // NPC respawn
   npcRespawnTimer += dt;
-  if (npcRespawnTimer >= NPC_RESPAWN_INTERVAL) {
+  if (npcRespawnTimer >= (config.npcRespawnInterval || 6000)) {
     npcRespawnTimer = 0;
-    spawnNPCs(3);
+    spawnNPCs(config.npcRespawnBatch || 3);
   }
 
   // Check for eliminated players

@@ -5,5 +5,14 @@
   "groupBonusMax": 2.0,
   "combatCooldown": 15,
   "baseCombatCooldown": 30,
-  "baseDefenseSpawns": 2
+  "baseDefenseSpawns": 2,
+  "npcMaxCount": 80,
+  "npcRespawnInterval": 6000,
+  "npcRespawnBatch": 3,
+  "npcSizeTiers": [
+    { "weight": 0.60, "min": 4, "max": 12 },
+    { "weight": 0.25, "min": 12, "max": 22 },
+    { "weight": 0.12, "min": 22, "max": 35 },
+    { "weight": 0.03, "min": 35, "max": 55 }
+  ]
 }

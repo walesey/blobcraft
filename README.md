@@ -87,7 +87,16 @@ Edit `config.json` to tune game balance:
   "groupBonusMax": 2.0,
   "combatCooldown": 15,
   "baseCombatCooldown": 30,
-  "baseDefenseSpawns": 2
+  "baseDefenseSpawns": 2,
+  "npcMaxCount": 80,
+  "npcRespawnInterval": 6000,
+  "npcRespawnBatch": 3,
+  "npcSizeTiers": [
+    { "weight": 0.60, "min": 4, "max": 12 },
+    { "weight": 0.25, "min": 12, "max": 22 },
+    { "weight": 0.12, "min": 22, "max": 35 },
+    { "weight": 0.03, "min": 35, "max": 55 }
+  ]
 }
 ```
 
@@ -100,3 +109,7 @@ Edit `config.json` to tune game balance:
 | `combatCooldown` | Ticks before a blob can fight again after eating another blob (30 ticks/sec). | `15` (~500ms) |
 | `baseCombatCooldown` | Ticks before a blob can damage an enemy base again. | `30` (~1s) |
 | `baseDefenseSpawns` | Number of baby blobs instantly spawned when a base takes damage. Set to `0` to disable. | `2` |
+| `npcMaxCount` | Maximum number of NPC blobs on the map at once. | `80` |
+| `npcRespawnInterval` | Milliseconds between NPC respawn batches. | `6000` |
+| `npcRespawnBatch` | Number of NPCs spawned per respawn cycle. | `3` |
+| `npcSizeTiers` | Array of `{weight, min, max}` objects controlling the NPC size distribution. Weights should sum to 1. | 4 tiers (see above) |
