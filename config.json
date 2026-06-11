@@ -1,3 +1,6 @@
 {
-  "npcCombatDisadvantage": 1.7
+  "npcCombatDisadvantage": 1.0,
+  "groupBonusPerAlly": 0.1,
+  "groupBonusRadius": 80,
+  "groupBonusMax": 2.0
 }

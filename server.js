@@ -220,15 +220,19 @@ function resolveCombat(a, b) {
   const bArea = sizeToArea(b.size);
   const total = aArea + bArea;
 
+  // Apply group bonus — each nearby ally adds a multiplier
+  const aEffective = aArea * (1 + (a.groupBonus || 0));
+  const bEffective = bArea * (1 + (b.groupBonus || 0));
+
   // NPCs are easier to beat — players get a configurable bonus to effective mass vs NPCs
   const npcDebuff = config.npcCombatDisadvantage;
   let pAWins;
   if (b.team === TEAM_NPC) {
-    pAWins = (aArea * npcDebuff) / (aArea * npcDebuff + bArea);
+    pAWins = (aEffective * npcDebuff) / (aEffective * npcDebuff + bEffective);
   } else if (a.team === TEAM_NPC) {
-    pAWins = aArea / (aArea + bArea * npcDebuff);
+    pAWins = aEffective / (aEffective + bEffective * npcDebuff);
   } else {
-    pAWins = aArea / total;
+    pAWins = aEffective / (aEffective + bEffective);
   }
 
   if (Math.random() < pAWins) {
@@ -337,6 +341,28 @@ function tick(dt) {
         }
       }
     }
+  }
+
+  // Compute group bonus for each blob (number of same-team allies nearby)
+  const groupRadius = config.groupBonusRadius || 80;
+  for (const b of blobs) {
+    if (!b.alive) { b.groupBonus = 0; continue; }
+    let allies = 0;
+    const cx = Math.floor(b.x / cellSize);
+    const cy = Math.floor(b.y / cellSize);
+    // Check wider area for group radius
+    const cells = Math.ceil(groupRadius / cellSize);
+    for (let dx = -cells; dx <= cells; dx++) {
+      for (let dy = -cells; dy <= cells; dy++) {
+        const key = `${cx + dx},${cy + dy}`;
+        if (!grid[key]) continue;
+        for (const other of grid[key]) {
+          if (other.id === b.id || !other.alive || other.team !== b.team) continue;
+          if (dist(b, other) <= groupRadius) allies++;
+        }
+      }
+    }
+    b.groupBonus = Math.min(allies * (config.groupBonusPerAlly || 0.1), (config.groupBonusMax || 2.0));
   }
 
   // Combat
@@ -489,6 +515,7 @@ function broadcastState() {
   const blobData = blobs.map(b => ({
     id: b.id, x: Math.round(b.x * 10) / 10, y: Math.round(b.y * 10) / 10,
     size: Math.round(b.size * 10) / 10, team: b.team,
+    gb: Math.round((b.groupBonus || 0) * 100) / 100,
   }));
 
   const baseData = bases.filter(b => b.alive).map(b => ({

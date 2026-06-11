@@ -54,7 +54,13 @@ Each blob's "mass" is its area (π × radius²). When two enemy blobs collide, t
 
 For example, a blob with radius 10 (area ~314) fighting one with radius 5 (area ~78) has roughly an 80% chance of winning. Equal-sized blobs have a 50/50 chance. The winner absorbs 80% of the loser's mass.
 
-NPCs are easier to farm — players get a configurable bonus to their effective mass when fighting NPCs (default 1.7x, making same-sized matchups ~63/37 in the player's favor).
+NPCs are easier to farm — players get a configurable bonus to their effective mass when fighting NPCs. Set `npcCombatDisadvantage` higher to make NPCs easier (1.0 = equal difficulty).
+
+### Group Bonus
+
+Blobs near friendly allies gain a combat bonus. Each same-team blob within range adds a stacking multiplier to effective mass during combat. This means a swarm of small blobs can overwhelm a single large blob that lacks support.
+
+Blobs with an active group bonus display a glowing ring and a `+N` indicator above them showing the stack count.
 
 ## Configuration
 
@@ -62,10 +68,16 @@ Edit `config.json` to tune game balance:
 
 ```json
 {
-  "npcCombatDisadvantage": 1.7
+  "npcCombatDisadvantage": 1.0,
+  "groupBonusPerAlly": 0.1,
+  "groupBonusRadius": 80,
+  "groupBonusMax": 2.0
 }
 ```
 
 | Key | Description | Default |
 |-----|-------------|---------|
-| `npcCombatDisadvantage` | Multiplier applied to a player's effective mass when fighting NPCs. Higher = NPCs are easier to farm. Set to `1.0` for equal difficulty. | `1.7` |
+| `npcCombatDisadvantage` | Multiplier applied to a player's effective mass when fighting NPCs. Higher = NPCs are easier to farm. Set to `1.0` for equal difficulty. | `1.0` |
+| `groupBonusPerAlly` | Combat multiplier added per nearby same-team blob (e.g. `0.1` = +10% per ally). | `0.1` |
+| `groupBonusRadius` | How close (in world units) allies must be to count for the group bonus. | `80` |
+| `groupBonusMax` | Maximum total group bonus multiplier. Caps the stacking so very large groups don't become invincible. | `2.0` |

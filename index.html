@@ -377,6 +377,28 @@ function drawBlobs() {
 
     ctx.restore();
 
+    // Group bonus indicator — glowing ring with stack count
+    if (b.gb && b.gb > 0) {
+      const intensity = Math.min(b.gb / 1.0, 1.0); // normalize to max visual at 1.0 bonus
+      const pulseAlpha = 0.3 + Math.sin(Date.now() * 0.004 + b.id) * 0.1;
+      ctx.strokeStyle = color.stroke;
+      ctx.lineWidth = 1.5 + intensity * 1.5;
+      ctx.globalAlpha = pulseAlpha + intensity * 0.3;
+      ctx.beginPath();
+      ctx.arc(sx, sy, b.size + 3 + intensity * 4, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+
+      // Stack count number
+      var stacks = Math.round(b.gb * 10);
+      if (stacks > 0) {
+        ctx.fillStyle = 'rgba(255,255,255,0.9)';
+        ctx.font = 'bold ' + Math.max(8, Math.min(12, b.size * 0.4)) + 'px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('+' + stacks, sx, sy - b.size - 6);
+      }
+    }
+
     if (selected.has(b.id)) {
       ctx.strokeStyle = '#fff';
       ctx.lineWidth = 2;
