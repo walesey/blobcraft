@@ -64,6 +64,7 @@ function createBlob(x, y, size, team) {
     attackMove: false,
     alive: true,
     combatCooldown: 0,
+    commandQueue: [],
   };
 }
 
@@ -193,7 +194,17 @@ function moveBlob(b) {
     }
   }
 
-  if (b.targetX === null) return;
+  if (b.targetX === null) {
+    // Dequeue next command if available
+    if (b.commandQueue.length > 0) {
+      const cmd = b.commandQueue.shift();
+      b.targetX = cmd.targetX;
+      b.targetY = cmd.targetY;
+      b.attackTarget = cmd.attackTarget;
+      b.attackMove = cmd.attackMove;
+    }
+    return;
+  }
 
   const dx = b.targetX - b.x;
   const dy = b.targetY - b.y;
@@ -205,8 +216,16 @@ function moveBlob(b) {
     b.targetY = null;
     if (b.attackMove) {
       const nearest = findNearestEnemy(b, 200);
-      if (nearest) b.attackTarget = nearest.id;
+      if (nearest) { b.attackTarget = nearest.id; return; }
       b.attackMove = false;
+    }
+    // Dequeue next command
+    if (b.commandQueue.length > 0) {
+      const cmd = b.commandQueue.shift();
+      b.targetX = cmd.targetX;
+      b.targetY = cmd.targetY;
+      b.attackTarget = cmd.attackTarget;
+      b.attackMove = cmd.attackMove;
     }
     return;
   }
@@ -480,15 +499,27 @@ function handleCommand(ws, msg) {
       if (!isFinite(x) || !isFinite(y)) return;
       const ids = (msg.ids || []).filter(id => ownedIds.has(id));
       const count = ids.length;
+      const queue = !!msg.queue;
       for (const id of ids) {
         const b = blobs.find(bl => bl.id === id);
         if (!b) continue;
         const angle = Math.random() * Math.PI * 2;
         const spread = Math.sqrt(count) * 8;
-        b.targetX = clamp(x + Math.cos(angle) * rand(0, spread), 0, WORLD_W);
-        b.targetY = clamp(y + Math.sin(angle) * rand(0, spread), 0, WORLD_H);
-        b.attackTarget = null;
-        b.attackMove = false;
+        const cmd = {
+          targetX: clamp(x + Math.cos(angle) * rand(0, spread), 0, WORLD_W),
+          targetY: clamp(y + Math.sin(angle) * rand(0, spread), 0, WORLD_H),
+          attackTarget: null,
+          attackMove: false,
+        };
+        if (queue) {
+          b.commandQueue.push(cmd);
+        } else {
+          b.commandQueue = [];
+          b.targetX = cmd.targetX;
+          b.targetY = cmd.targetY;
+          b.attackTarget = null;
+          b.attackMove = false;
+        }
       }
       break;
     }
@@ -497,11 +528,23 @@ function handleCommand(ws, msg) {
       const target = blobs.find(b => b.id === targetId && b.alive && b.team !== team);
       if (!target) return;
       const ids = (msg.ids || []).filter(id => ownedIds.has(id));
+      const queue = !!msg.queue;
       for (const id of ids) {
         const b = blobs.find(bl => bl.id === id);
         if (!b) continue;
-        b.attackTarget = targetId;
-        b.attackMove = false;
+        const cmd = {
+          targetX: null,
+          targetY: null,
+          attackTarget: targetId,
+          attackMove: false,
+        };
+        if (queue) {
+          b.commandQueue.push(cmd);
+        } else {
+          b.commandQueue = [];
+          b.attackTarget = targetId;
+          b.attackMove = false;
+        }
       }
       break;
     }
@@ -510,13 +553,25 @@ function handleCommand(ws, msg) {
       const y = Number(msg.y);
       if (!isFinite(x) || !isFinite(y)) return;
       const ids = (msg.ids || []).filter(id => ownedIds.has(id));
+      const queue = !!msg.queue;
       for (const id of ids) {
         const b = blobs.find(bl => bl.id === id);
         if (!b) continue;
-        b.targetX = clamp(x, 0, WORLD_W);
-        b.targetY = clamp(y, 0, WORLD_H);
-        b.attackTarget = null;
-        b.attackMove = true;
+        const cmd = {
+          targetX: clamp(x, 0, WORLD_W),
+          targetY: clamp(y, 0, WORLD_H),
+          attackTarget: null,
+          attackMove: true,
+        };
+        if (queue) {
+          b.commandQueue.push(cmd);
+        } else {
+          b.commandQueue = [];
+          b.targetX = cmd.targetX;
+          b.targetY = cmd.targetY;
+          b.attackTarget = null;
+          b.attackMove = true;
+        }
       }
       break;
     }
@@ -529,6 +584,7 @@ function handleCommand(ws, msg) {
         b.targetY = null;
         b.attackTarget = null;
         b.attackMove = false;
+        b.commandQueue = [];
       }
       break;
     }

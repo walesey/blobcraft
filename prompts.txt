@@ -32,3 +32,6 @@ Please also implement a graphical indication of this stacking group buff state.
 
 
 Please add control groups. ctrl-1 to create group, shift-# add to group, alt-# steal to new group, shift-alt-# steal and add to group, etc.
+
+
+Please add shift queue commands.

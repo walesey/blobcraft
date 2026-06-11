@@ -535,7 +535,7 @@ canvas.addEventListener('mouseup', function(e) {
       if (attackMoveMode) {
         const wx = e.clientX + camX;
         const wy = e.clientY + camY;
-        send({ type: 'attackMove', ids: Array.from(selected), x: wx, y: wy });
+        send({ type: 'attackMove', ids: Array.from(selected), x: wx, y: wy, queue: e.shiftKey });
         attackMoveMode = false;
         selBox = null;
         return;
@@ -574,6 +574,7 @@ canvas.addEventListener('contextmenu', function(e) {
 
   const wx = e.clientX + camX;
   const wy = e.clientY + camY;
+  const queue = e.shiftKey;
 
   let target = null;
   for (const b of blobs) {
@@ -592,11 +593,11 @@ canvas.addEventListener('contextmenu', function(e) {
   }
 
   if (target) {
-    send({ type: 'attack', ids: Array.from(selected), targetId: target.id });
+    send({ type: 'attack', ids: Array.from(selected), targetId: target.id, queue: queue });
   } else if (targetBase) {
-    send({ type: 'attackMove', ids: Array.from(selected), x: targetBase.x, y: targetBase.y });
+    send({ type: 'attackMove', ids: Array.from(selected), x: targetBase.x, y: targetBase.y, queue: queue });
   } else {
-    send({ type: 'move', ids: Array.from(selected), x: wx, y: wy });
+    send({ type: 'move', ids: Array.from(selected), x: wx, y: wy, queue: queue });
   }
 
   spawnParticle(wx, wy, 'rgba(100,200,255,0.8)', 4);
