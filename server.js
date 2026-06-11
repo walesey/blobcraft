@@ -595,12 +595,34 @@ function handleCommand(ws, msg) {
 function broadcastState() {
   if (players.size === 0) return;
 
-  // Build compact blob data
-  const blobData = blobs.map(b => ({
+  // Build base blob data without waypoints (shared by all players)
+  const baseBlobData = blobs.map(b => ({
     id: b.id, x: Math.round(b.x * 10) / 10, y: Math.round(b.y * 10) / 10,
     size: Math.round(b.size * 10) / 10, team: b.team,
     gb: Math.round((b.groupBonus || 0) * 100) / 100,
   }));
+
+  // Pre-compute waypoints per blob (only for blobs with commands)
+  const waypointsByBlobId = {};
+  for (const b of blobs) {
+    if (b.targetX === null && b.attackTarget === null && b.commandQueue.length === 0) continue;
+    const waypoints = [];
+    if (b.targetX !== null) {
+      waypoints.push({ x: Math.round(b.targetX), y: Math.round(b.targetY), am: b.attackMove || false });
+    } else if (b.attackTarget !== null) {
+      const t = blobs.find(bl => bl.id === b.attackTarget && bl.alive);
+      if (t) waypoints.push({ x: Math.round(t.x), y: Math.round(t.y), atk: true });
+    }
+    for (const cmd of b.commandQueue) {
+      if (cmd.attackTarget !== null) {
+        const t = blobs.find(bl => bl.id === cmd.attackTarget && bl.alive);
+        if (t) waypoints.push({ x: Math.round(t.x), y: Math.round(t.y), atk: true });
+      } else if (cmd.targetX !== null) {
+        waypoints.push({ x: Math.round(cmd.targetX), y: Math.round(cmd.targetY), am: cmd.attackMove || false });
+      }
+    }
+    if (waypoints.length > 0) waypointsByBlobId[b.id] = waypoints;
+  }
 
   const baseData = bases.filter(b => b.alive).map(b => ({
     team: b.team, x: b.x, y: b.y, hp: Math.round(b.hp), maxHp: b.maxHp,
@@ -611,20 +633,26 @@ function broadcastState() {
     playerList.push({ team: p.team, alive: p.alive });
   }
 
-  const stateMsg = JSON.stringify({
-    type: 'state',
-    blobs: blobData,
-    bases: baseData,
-    players: playerList,
-    events: events,
-  });
-
+  const eventsSnapshot = events;
   events = [];
 
-  for (const [ws] of players) {
-    if (ws.readyState === 1) { // OPEN
-      ws.send(stateMsg);
-    }
+  // Send per-player state with waypoints only for their own blobs
+  for (const [ws, player] of players) {
+    if (ws.readyState !== 1) continue;
+    const team = player.team;
+    const blobData = baseBlobData.map(bd => {
+      const wp = (bd.team === team) ? waypointsByBlobId[bd.id] : undefined;
+      if (wp) return Object.assign({}, bd, { wp: wp });
+      return bd;
+    });
+
+    ws.send(JSON.stringify({
+      type: 'state',
+      blobs: blobData,
+      bases: baseData,
+      players: playerList,
+      events: eventsSnapshot,
+    }));
   }
 }
 

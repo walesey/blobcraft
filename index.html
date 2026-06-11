@@ -439,6 +439,69 @@ function drawSelectionBox() {
   ctx.fillRect(x1, y1, w, h);
 }
 
+function drawCommandRoutes() {
+  if (selected.size === 0) return;
+  for (const b of blobs) {
+    if (!selected.has(b.id) || b.team !== myTeam || !b.wp || b.wp.length === 0) continue;
+
+    var prevX = b.x - camX;
+    var prevY = b.y - camY;
+
+    for (var i = 0; i < b.wp.length; i++) {
+      var wp = b.wp[i];
+      var wx = wp.x - camX;
+      var wy = wp.y - camY;
+
+      // Line style based on command type
+      if (wp.atk) {
+        ctx.strokeStyle = 'rgba(255,80,80,0.5)';
+      } else if (wp.am) {
+        ctx.strokeStyle = 'rgba(255,180,60,0.5)';
+      } else {
+        ctx.strokeStyle = 'rgba(100,200,255,0.4)';
+      }
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([6, 4]);
+      ctx.beginPath();
+      ctx.moveTo(prevX, prevY);
+      ctx.lineTo(wx, wy);
+      ctx.stroke();
+
+      // Waypoint marker
+      ctx.setLineDash([]);
+      if (wp.atk) {
+        // Red X for attack targets
+        ctx.strokeStyle = 'rgba(255,80,80,0.7)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(wx - 5, wy - 5); ctx.lineTo(wx + 5, wy + 5);
+        ctx.moveTo(wx + 5, wy - 5); ctx.lineTo(wx - 5, wy + 5);
+        ctx.stroke();
+      } else if (wp.am) {
+        // Orange diamond for attack-move
+        ctx.strokeStyle = 'rgba(255,180,60,0.7)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(wx, wy - 5); ctx.lineTo(wx + 5, wy);
+        ctx.lineTo(wx, wy + 5); ctx.lineTo(wx - 5, wy);
+        ctx.closePath();
+        ctx.stroke();
+      } else {
+        // Blue circle for move
+        ctx.strokeStyle = 'rgba(100,200,255,0.6)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(wx, wy, 4, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      prevX = wx;
+      prevY = wy;
+    }
+    ctx.setLineDash([]);
+  }
+}
+
 function drawMinimap() {
   minimapCtx.fillStyle = '#1a1a2e';
   minimapCtx.fillRect(0, 0, MINIMAP_W, MINIMAP_H);
@@ -695,6 +758,7 @@ function gameLoop(timestamp) {
   drawWorld();
   drawBases();
   drawBlobs();
+  drawCommandRoutes();
   drawParticlesView();
   drawSelectionBox();
   drawHUD();
