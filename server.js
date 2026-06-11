@@ -403,13 +403,19 @@ function tick(dt) {
         const d = Math.hypot(dx, dy) || 0.1;
         const minDist = b.size + other.size;
         if (d < minDist) {
-          const overlap = (minDist - d) / 2;
+          const overlap = minDist - d;
           const nx = dx / d;
           const ny = dy / d;
-          b.x -= nx * overlap;
-          b.y -= ny * overlap;
-          other.x += nx * overlap;
-          other.y += ny * overlap;
+          // Mass proportional to area (size²); heavier blobs move less
+          const massB = b.size * b.size;
+          const massO = other.size * other.size;
+          const totalMass = massB + massO;
+          const pushB = overlap * (massO / totalMass);
+          const pushO = overlap * (massB / totalMass);
+          b.x -= nx * pushB;
+          b.y -= ny * pushB;
+          other.x += nx * pushO;
+          other.y += ny * pushO;
           b.x = clamp(b.x, b.size, WORLD_W - b.size);
           b.y = clamp(b.y, b.size, WORLD_H - b.size);
           other.x = clamp(other.x, other.size, WORLD_W - other.size);

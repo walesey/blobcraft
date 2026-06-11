@@ -35,3 +35,12 @@ Please add control groups. ctrl-1 to create group, shift-# add to group, alt-# s
 
 
 Please add shift queue commands.
+
+
+Please also add ui line indicators to show the current command route
+
+
+when I move command to a friendly blob the selected blobs should follow that blob until he dies.
+
+
+When a blob get's bigger it should also get more massive and so smaller blobs should not be able to shove him as much.
