@@ -53,3 +53,19 @@ Each blob's "mass" is its area (π × radius²). When two enemy blobs collide, t
 **P(A wins) = area_A / (area_A + area_B)**
 
 For example, a blob with radius 10 (area ~314) fighting one with radius 5 (area ~78) has roughly an 80% chance of winning. Equal-sized blobs have a 50/50 chance. The winner absorbs 80% of the loser's mass.
+
+NPCs are easier to farm — players get a configurable bonus to their effective mass when fighting NPCs (default 1.7x, making same-sized matchups ~63/37 in the player's favor).
+
+## Configuration
+
+Edit `config.json` to tune game balance:
+
+```json
+{
+  "npcCombatDisadvantage": 1.7
+}
+```
+
+| Key | Description | Default |
+|-----|-------------|---------|
+| `npcCombatDisadvantage` | Multiplier applied to a player's effective mass when fighting NPCs. Higher = NPCs are easier to farm. Set to `1.0` for equal difficulty. | `1.7` |

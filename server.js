@@ -7,6 +7,8 @@ const fs = require('fs');
 const path = require('path');
 const { WebSocketServer } = require('ws');
 
+const config = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf8'));
+
 const PORT = process.env.PORT || 3000;
 const TICK_RATE = 30; // server simulation ticks per second
 const BROADCAST_RATE = 20; // state broadcasts per second
@@ -217,7 +219,17 @@ function resolveCombat(a, b) {
   const aArea = sizeToArea(a.size);
   const bArea = sizeToArea(b.size);
   const total = aArea + bArea;
-  const pAWins = aArea / total;
+
+  // NPCs are easier to beat — players get a configurable bonus to effective mass vs NPCs
+  const npcDebuff = config.npcCombatDisadvantage;
+  let pAWins;
+  if (b.team === TEAM_NPC) {
+    pAWins = (aArea * npcDebuff) / (aArea * npcDebuff + bArea);
+  } else if (a.team === TEAM_NPC) {
+    pAWins = aArea / (aArea + bArea * npcDebuff);
+  } else {
+    pAWins = aArea / total;
+  }
 
   if (Math.random() < pAWins) {
     a.size = areaToSize(aArea + bArea * 0.8);
