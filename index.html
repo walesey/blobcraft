@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Blob RTS</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #111; overflow: hidden; font-family: 'Segoe UI', sans-serif; }
+canvas { display: block; cursor: default; }
+#hud {
+  position: fixed; top: 10px; left: 10px;
+  color: #fff; font-size: 14px;
+  pointer-events: none; text-shadow: 1px 1px 2px #000;
+}
+#hud div { margin-bottom: 4px; }
+#minimap {
+  position: fixed; bottom: 10px; right: 10px;
+  border: 2px solid rgba(255,255,255,0.3);
+  background: rgba(0,0,0,0.5);
+}
+#instructions {
+  position: fixed; bottom: 10px; left: 10px;
+  color: rgba(255,255,255,0.5); font-size: 12px;
+  pointer-events: none;
+}
+#overlay {
+  position: fixed; top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  color: #fff; font-size: 48px; font-weight: bold;
+  text-shadow: 2px 2px 8px #000;
+  pointer-events: none; text-align: center;
+}
+#overlay .sub { font-size: 18px; margin-top: 10px; font-weight: normal; }
+#status {
+  position: fixed; top: 10px; right: 200px;
+  color: rgba(255,255,255,0.6); font-size: 12px;
+  pointer-events: none;
+}
+</style>
+</head>
+<body>
+<div id="hud">
+  <div id="unitCount">Units: 0</div>
+  <div id="totalMass">Total Mass: 0</div>
+  <div id="playerInfo">Players: 0</div>
+</div>
+<div id="overlay">
+  <div>Connecting...</div>
+  <div class="sub"></div>
+</div>
+<div id="status"></div>
+<canvas id="minimap" width="180" height="180"></canvas>
+<div id="instructions">
+  Left-click: Select | Drag: Box select | Right-click: Move/Attack | A: Attack-move | S: Stop | Shift+click: Add to selection
+</div>
+<canvas id="game"></canvas>
+
+<script>
+// ============================================================
+// BLOB RTS — Multiplayer Client
+// ============================================================
+
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const minimapCanvas = document.getElementById('minimap');
+const minimapCtx = minimapCanvas.getContext('2d');
+const overlay = document.getElementById('overlay');
+
+// --- Constants ---
+const MINIMAP_W = 180;
+const MINIMAP_H = 180;
+const BASE_RADIUS = 40;
+const TEAM_NPC = -1;
+
+// Team colors — up to 8 players + NPC
+const TEAM_COLORS = [
+  { fill: 'rgba(60,140,255,0.85)',  stroke: '#4a9fff', base: 'rgba(60,140,255,0.3)' },
+  { fill: 'rgba(255,70,70,0.85)',   stroke: '#ff6666', base: 'rgba(255,70,70,0.3)' },
+  { fill: 'rgba(255,200,40,0.85)',  stroke: '#ffc828', base: 'rgba(255,200,40,0.3)' },
+  { fill: 'rgba(200,60,255,0.85)',  stroke: '#c83cff', base: 'rgba(200,60,255,0.3)' },
+  { fill: 'rgba(255,140,40,0.85)',  stroke: '#ff8c28', base: 'rgba(255,140,40,0.3)' },
+  { fill: 'rgba(40,220,220,0.85)',  stroke: '#28dcdc', base: 'rgba(40,220,220,0.3)' },
+  { fill: 'rgba(255,100,180,0.85)', stroke: '#ff64b4', base: 'rgba(255,100,180,0.3)' },
+  { fill: 'rgba(180,180,180,0.85)', stroke: '#b4b4b4', base: 'rgba(180,180,180,0.3)' },
+];
+const NPC_COLOR = { fill: 'rgba(100,220,100,0.7)', stroke: '#6d6', base: null };
+
+function getColor(team) {
+  if (team === TEAM_NPC) return NPC_COLOR;
+  return TEAM_COLORS[team % TEAM_COLORS.length] || TEAM_COLORS[0];
+}
+
+// --- State ---
+let WORLD_W = 3200, WORLD_H = 3200;
+let myTeam = -99;
+let camX = 0, camY = 0;
+let screenW, screenH;
+let blobs = [];
+let bases = [];
+let particles = [];
+let selected = new Set();
+let selBox = null;
+let mouseWorld = { x: 0, y: 0 };
+let mouseScreen = { x: 0, y: 0 };
+let attackMoveMode = false;
+let connected = false;
+let eliminated = false;
+let totalPlayers = 0;
+let ws = null;
+
+// --- Resize ---
+function resize() {
+  screenW = canvas.width = window.innerWidth;
+  screenH = canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// --- Utility ---
+function dist(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+function rand(lo, hi) { return lo + Math.random() * (hi - lo); }
+function sizeToArea(r) { return Math.PI * r * r; }
+
+// --- Particles (client-side only) ---
+function spawnParticle(x, y, color, count) {
+  count = count || 5;
+  for (let i = 0; i < count; i++) {
+    particles.push({
+      x: x, y: y,
+      vx: rand(-2, 2), vy: rand(-2, 2),
+      life: rand(20, 40), maxLife: 40,
+      color: color, size: rand(2, 5),
+    });
+  }
+}
+
+function updateParticles() {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx; p.y += p.vy; p.life -= 1;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+}
+
+// --- Network ---
+function connect() {
+  const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(protocol + '//' + location.host);
+
+  ws.onopen = function() {
+    overlay.innerHTML = '<div>Waiting for server...</div>';
+  };
+
+  ws.onmessage = function(e) {
+    var msg = JSON.parse(e.data);
+    handleServerMessage(msg);
+  };
+
+  ws.onclose = function() {
+    connected = false;
+    overlay.style.display = 'block';
+    overlay.innerHTML = '<div>Disconnected</div><div class="sub">Reconnecting...</div>';
+    setTimeout(connect, 2000);
+  };
+
+  ws.onerror = function() {};
+}
+
+function send(msg) {
+  if (ws && ws.readyState === 1) {
+    ws.send(JSON.stringify(msg));
+  }
+}
+
+function handleServerMessage(msg) {
+  switch (msg.type) {
+    case 'welcome':
+      myTeam = msg.team;
+      WORLD_W = msg.worldW;
+      WORLD_H = msg.worldH;
+      connected = true;
+      eliminated = false;
+      overlay.style.display = 'none';
+      break;
+
+    case 'full':
+      overlay.style.display = 'block';
+      overlay.innerHTML = '<div>Server Full</div><div class="sub">Max 8 players</div>';
+      break;
+
+    case 'state':
+      blobs = msg.blobs;
+      bases = msg.bases;
+      totalPlayers = msg.players ? msg.players.length : 0;
+
+      if (msg.events) {
+        for (var ei = 0; ei < msg.events.length; ei++) {
+          var evt = msg.events[ei];
+          switch (evt.type) {
+            case 'kill':
+              spawnParticle(evt.x, evt.y, getColor(evt.team).stroke, 8);
+              break;
+            case 'baseHit':
+              spawnParticle(evt.x, evt.y, getColor(evt.team).stroke, 3);
+              break;
+            case 'baseDestroyed':
+              spawnParticle(evt.x, evt.y, getColor(evt.team).stroke, 30);
+              break;
+            case 'eliminated':
+              if (evt.team === myTeam) {
+                eliminated = true;
+                overlay.style.display = 'block';
+                overlay.innerHTML = '<div style="color:#f55">ELIMINATED</div><div class="sub">You have been consumed</div>';
+              }
+              break;
+            case 'victory':
+              if (evt.team === myTeam) {
+                overlay.style.display = 'block';
+                overlay.innerHTML = '<div style="color:#5f5">VICTORY</div><div class="sub">You are the ultimate blob</div>';
+              } else {
+                overlay.style.display = 'block';
+                overlay.innerHTML = '<div style="color:#f55">DEFEAT</div><div class="sub">Team ' + evt.team + ' wins</div>';
+              }
+              break;
+          }
+        }
+      }
+
+      // Clean selected set
+      var validIds = new Set(blobs.filter(function(b) { return b.team === myTeam; }).map(function(b) { return b.id; }));
+      for (var id of selected) {
+        if (!validIds.has(id)) selected.delete(id);
+      }
+      break;
+
+    case 'playerJoined':
+      totalPlayers = msg.totalPlayers;
+      break;
+
+    case 'playerLeft':
+      totalPlayers = msg.totalPlayers;
+      break;
+  }
+}
+
+// --- Center camera on own base ---
+let hasCentered = false;
+function centerOnBase() {
+  if (hasCentered) return;
+  const myBase = bases.find(function(b) { return b.team === myTeam; });
+  if (myBase) {
+    camX = myBase.x - screenW / 2;
+    camY = myBase.y - screenH / 2;
+    camX = clamp(camX, 0, WORLD_W - screenW);
+    camY = clamp(camY, 0, WORLD_H - screenH);
+    hasCentered = true;
+  }
+}
+
+// --- Drawing ---
+function drawWorld() {
+  ctx.fillStyle = '#1a1a2e';
+  ctx.fillRect(0, 0, screenW, screenH);
+
+  ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+  ctx.lineWidth = 1;
+  const gridSize = 80;
+  const startX = -(camX % gridSize);
+  const startY = -(camY % gridSize);
+  for (let x = startX; x < screenW; x += gridSize) {
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, screenH); ctx.stroke();
+  }
+  for (let y = startY; y < screenH; y += gridSize) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(screenW, y); ctx.stroke();
+  }
+
+  ctx.strokeStyle = 'rgba(255,100,100,0.3)';
+  ctx.lineWidth = 3;
+  ctx.strokeRect(-camX, -camY, WORLD_W, WORLD_H);
+}
+
+function drawBases() {
+  for (const base of bases) {
+    const sx = base.x - camX;
+    const sy = base.y - camY;
+    const color = getColor(base.team);
+
+    const grad = ctx.createRadialGradient(sx, sy, 0, sx, sy, BASE_RADIUS * 2);
+    grad.addColorStop(0, color.base || 'transparent');
+    grad.addColorStop(1, 'transparent');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(sx, sy, BASE_RADIUS * 2, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = color.fill;
+    ctx.strokeStyle = color.stroke;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(sx, sy, BASE_RADIUS, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    const barW = 60, barH = 6;
+    const hpFrac = base.hp / base.maxHp;
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillRect(sx - barW / 2, sy - BASE_RADIUS - 15, barW, barH);
+    ctx.fillStyle = hpFrac > 0.5 ? '#5f5' : hpFrac > 0.25 ? '#ff5' : '#f55';
+    ctx.fillRect(sx - barW / 2, sy - BASE_RADIUS - 15, barW * hpFrac, barH);
+
+    ctx.fillStyle = '#fff';
+    ctx.font = '11px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(base.team === myTeam ? 'YOUR BASE' : 'PLAYER ' + base.team, sx, sy + 4);
+  }
+}
+
+function drawBlobs() {
+  for (const b of blobs) {
+    const sx = b.x - camX;
+    const sy = b.y - camY;
+    if (sx < -b.size * 2 || sx > screenW + b.size * 2 || sy < -b.size * 2 || sy > screenH + b.size * 2) continue;
+
+    const color = getColor(b.team);
+    const wobble = Math.sin(Date.now() * 0.005 + b.id * 1.3) * 0.08;
+
+    ctx.save();
+    ctx.translate(sx, sy);
+    ctx.scale(1 + wobble, 1 - wobble);
+
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.beginPath();
+    ctx.ellipse(2, 3, b.size, b.size * 0.6, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = color.fill;
+    ctx.strokeStyle = color.stroke;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, 0, b.size, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    const hlGrad = ctx.createRadialGradient(-b.size * 0.3, -b.size * 0.3, 0, 0, 0, b.size);
+    hlGrad.addColorStop(0, 'rgba(255,255,255,0.3)');
+    hlGrad.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = hlGrad;
+    ctx.beginPath();
+    ctx.arc(0, 0, b.size, 0, Math.PI * 2);
+    ctx.fill();
+
+    if (b.team !== TEAM_NPC && b.size > 6) {
+      const eyeR = Math.max(1.5, b.size * 0.15);
+      const eyeOff = b.size * 0.25;
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.arc(-eyeOff, -b.size * 0.15, eyeR, 0, Math.PI * 2);
+      ctx.arc(eyeOff, -b.size * 0.15, eyeR, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#111';
+      const pupilR = eyeR * 0.5;
+      ctx.beginPath();
+      ctx.arc(-eyeOff + pupilR * 0.3, -b.size * 0.15, pupilR, 0, Math.PI * 2);
+      ctx.arc(eyeOff + pupilR * 0.3, -b.size * 0.15, pupilR, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.restore();
+
+    if (selected.has(b.id)) {
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.arc(sx, sy, b.size + 5, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+  }
+}
+
+function drawParticlesView() {
+  for (const p of particles) {
+    const sx = p.x - camX;
+    const sy = p.y - camY;
+    const alpha = p.life / p.maxLife;
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(sx, sy, p.size * alpha, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawSelectionBox() {
+  if (!selBox) return;
+  const x1 = Math.min(selBox.sx1, selBox.sx2);
+  const y1 = Math.min(selBox.sy1, selBox.sy2);
+  const w = Math.abs(selBox.sx2 - selBox.sx1);
+  const h = Math.abs(selBox.sy2 - selBox.sy1);
+  ctx.strokeStyle = 'rgba(100,200,255,0.8)';
+  ctx.fillStyle = 'rgba(100,200,255,0.1)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x1, y1, w, h);
+  ctx.fillRect(x1, y1, w, h);
+}
+
+function drawMinimap() {
+  minimapCtx.fillStyle = '#1a1a2e';
+  minimapCtx.fillRect(0, 0, MINIMAP_W, MINIMAP_H);
+
+  const sx = MINIMAP_W / WORLD_W;
+  const sy = MINIMAP_H / WORLD_H;
+
+  for (const base of bases) {
+    minimapCtx.fillStyle = getColor(base.team).stroke;
+    minimapCtx.fillRect(base.x * sx - 3, base.y * sy - 3, 6, 6);
+  }
+
+  for (const b of blobs) {
+    minimapCtx.fillStyle = getColor(b.team).stroke;
+    const r = Math.max(1, b.size * sx * 0.5);
+    minimapCtx.fillRect(b.x * sx - r / 2, b.y * sy - r / 2, r, r);
+  }
+
+  minimapCtx.strokeStyle = 'rgba(255,255,255,0.6)';
+  minimapCtx.lineWidth = 1;
+  minimapCtx.strokeRect(camX * sx, camY * sy, screenW * sx, screenH * sy);
+}
+
+function drawHUD() {
+  const myBlobs = blobs.filter(function(b) { return b.team === myTeam; });
+  const totalMass = Math.round(myBlobs.reduce(function(s, b) { return s + sizeToArea(b.size); }, 0));
+  document.getElementById('unitCount').textContent = 'Units: ' + myBlobs.length + ' | Selected: ' + selected.size;
+  document.getElementById('totalMass').textContent = 'Total Mass: ' + totalMass;
+  document.getElementById('playerInfo').textContent = 'Players: ' + totalPlayers + ' | You: Team ' + myTeam;
+
+  if (attackMoveMode) {
+    ctx.fillStyle = 'rgba(255,50,50,0.3)';
+    ctx.strokeStyle = '#f55';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(mouseScreen.x, mouseScreen.y, 15, 0, Math.PI * 2);
+    ctx.fill(); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(mouseScreen.x - 10, mouseScreen.y);
+    ctx.lineTo(mouseScreen.x + 10, mouseScreen.y);
+    ctx.moveTo(mouseScreen.x, mouseScreen.y - 10);
+    ctx.lineTo(mouseScreen.x, mouseScreen.y + 10);
+    ctx.stroke();
+  }
+}
+
+// --- Camera ---
+const keysDown = new Set();
+const CAM_SPEED = 8;
+const CAM_EDGE_SIZE = 30;
+
+function updateCamera() {
+  let dx = 0, dy = 0;
+  if (keysDown.has('ArrowLeft') || mouseScreen.x < CAM_EDGE_SIZE) dx -= CAM_SPEED;
+  if (keysDown.has('ArrowRight') || mouseScreen.x > screenW - CAM_EDGE_SIZE) dx += CAM_SPEED;
+  if (keysDown.has('ArrowUp') || mouseScreen.y < CAM_EDGE_SIZE) dy -= CAM_SPEED;
+  if (keysDown.has('ArrowDown') || mouseScreen.y > screenH - CAM_EDGE_SIZE) dy += CAM_SPEED;
+
+  camX = clamp(camX + dx, 0, WORLD_W - screenW);
+  camY = clamp(camY + dy, 0, WORLD_H - screenH);
+}
+
+// --- Input ---
+let isDragging = false;
+let dragStartX, dragStartY;
+
+canvas.addEventListener('mousedown', function(e) {
+  if (e.button === 0) {
+    isDragging = true;
+    dragStartX = e.clientX;
+    dragStartY = e.clientY;
+    selBox = { sx1: e.clientX, sy1: e.clientY, sx2: e.clientX, sy2: e.clientY };
+  }
+});
+
+canvas.addEventListener('mousemove', function(e) {
+  mouseScreen.x = e.clientX;
+  mouseScreen.y = e.clientY;
+  mouseWorld.x = e.clientX + camX;
+  mouseWorld.y = e.clientY + camY;
+  if (isDragging && selBox) {
+    selBox.sx2 = e.clientX;
+    selBox.sy2 = e.clientY;
+  }
+});
+
+canvas.addEventListener('mouseup', function(e) {
+  if (e.button === 0 && isDragging) {
+    isDragging = false;
+    const ddx = Math.abs(e.clientX - dragStartX);
+    const ddy = Math.abs(e.clientY - dragStartY);
+
+    if (ddx < 5 && ddy < 5) {
+      if (attackMoveMode) {
+        const wx = e.clientX + camX;
+        const wy = e.clientY + camY;
+        send({ type: 'attackMove', ids: Array.from(selected), x: wx, y: wy });
+        attackMoveMode = false;
+        selBox = null;
+        return;
+      }
+
+      const wx = e.clientX + camX;
+      const wy = e.clientY + camY;
+      let clicked = null;
+      for (const b of blobs) {
+        if (b.team === myTeam && Math.hypot(b.x - wx, b.y - wy) < b.size + 5) {
+          clicked = b;
+          break;
+        }
+      }
+      if (!e.shiftKey) selected.clear();
+      if (clicked) selected.add(clicked.id);
+    } else {
+      if (!e.shiftKey) selected.clear();
+      const x1 = Math.min(selBox.sx1, selBox.sx2) + camX;
+      const y1 = Math.min(selBox.sy1, selBox.sy2) + camY;
+      const x2 = Math.max(selBox.sx1, selBox.sx2) + camX;
+      const y2 = Math.max(selBox.sy1, selBox.sy2) + camY;
+      for (const b of blobs) {
+        if (b.team === myTeam && b.x >= x1 && b.x <= x2 && b.y >= y1 && b.y <= y2) {
+          selected.add(b.id);
+        }
+      }
+    }
+    selBox = null;
+  }
+});
+
+canvas.addEventListener('contextmenu', function(e) {
+  e.preventDefault();
+  if (!connected || eliminated || selected.size === 0) return;
+
+  const wx = e.clientX + camX;
+  const wy = e.clientY + camY;
+
+  let target = null;
+  for (const b of blobs) {
+    if (b.team !== myTeam && Math.hypot(b.x - wx, b.y - wy) < b.size + 5) {
+      target = b;
+      break;
+    }
+  }
+
+  let targetBase = null;
+  for (const b of bases) {
+    if (b.team !== myTeam && Math.hypot(b.x - wx, b.y - wy) < BASE_RADIUS + 10) {
+      targetBase = b;
+      break;
+    }
+  }
+
+  if (target) {
+    send({ type: 'attack', ids: Array.from(selected), targetId: target.id });
+  } else if (targetBase) {
+    send({ type: 'attackMove', ids: Array.from(selected), x: targetBase.x, y: targetBase.y });
+  } else {
+    send({ type: 'move', ids: Array.from(selected), x: wx, y: wy });
+  }
+
+  spawnParticle(wx, wy, 'rgba(100,200,255,0.8)', 4);
+});
+
+minimapCanvas.addEventListener('mousedown', function(e) {
+  const rect = minimapCanvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+  camX = clamp((mx / MINIMAP_W) * WORLD_W - screenW / 2, 0, WORLD_W - screenW);
+  camY = clamp((my / MINIMAP_H) * WORLD_H - screenH / 2, 0, WORLD_H - screenH);
+});
+minimapCanvas.addEventListener('contextmenu', function(e) { e.preventDefault(); });
+
+window.addEventListener('keydown', function(e) {
+  keysDown.add(e.key);
+
+  if (e.key === 'a' && !e.ctrlKey && selected.size > 0) {
+    attackMoveMode = true;
+  }
+  if (e.key === 's' && !e.ctrlKey && selected.size > 0) {
+    send({ type: 'stop', ids: Array.from(selected) });
+  }
+  if (e.key === 'Escape') {
+    attackMoveMode = false;
+    selected.clear();
+  }
+  if (e.key === 'a' && e.ctrlKey) {
+    e.preventDefault();
+    selected.clear();
+    for (const b of blobs) {
+      if (b.team === myTeam) selected.add(b.id);
+    }
+  }
+});
+
+window.addEventListener('keyup', function(e) {
+  keysDown.delete(e.key);
+});
+
+window.addEventListener('contextmenu', function(e) { e.preventDefault(); });
+
+// --- Game Loop ---
+let lastTime = 0;
+
+function gameLoop(timestamp) {
+  lastTime = timestamp;
+
+  centerOnBase();
+  updateCamera();
+  updateParticles();
+
+  drawWorld();
+  drawBases();
+  drawBlobs();
+  drawParticlesView();
+  drawSelectionBox();
+  drawHUD();
+  drawMinimap();
+
+  requestAnimationFrame(gameLoop);
+}
+
+connect();
+requestAnimationFrame(function(t) { lastTime = t; gameLoop(t); });
+</script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+Please create a browser game that is a simple starcraft style RTS where I control units that 
+are just blobs that fight the enemy blobs by eating them and getting bigger. 
+The base building will produce small baby blobs slowly over time and there will 
+be NPC blobs that my blobs can eat to grow in size and effectiveness. When 2 blobs 
+fight there will be a probability calculation to see who beats the other based on 
+relative size of each blob, bigger blob will have a higher probablility of eating a smaller blob. 
+Size increase will be proportional to the size of the blob that was eaten.
+
+
+Please add blob collisions so that blobs can't overlap
+
+
+Please add a multiplayer server so that instead of AI opponents I can have players join my 
+IP and get spawned into the game world as they join the server.
+
