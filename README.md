@@ -86,7 +86,8 @@ Edit `config.json` to tune game balance:
   "groupBonusRadius": 80,
   "groupBonusMax": 2.0,
   "combatCooldown": 15,
-  "baseCombatCooldown": 30
+  "baseCombatCooldown": 30,
+  "baseDefenseSpawns": 2
 }
 ```
 
@@ -98,3 +99,4 @@ Edit `config.json` to tune game balance:
 | `groupBonusMax` | Maximum total group bonus multiplier. Caps the stacking so very large groups don't become invincible. | `2.0` |
 | `combatCooldown` | Ticks before a blob can fight again after eating another blob (30 ticks/sec). | `15` (~500ms) |
 | `baseCombatCooldown` | Ticks before a blob can damage an enemy base again. | `30` (~1s) |
+| `baseDefenseSpawns` | Number of baby blobs instantly spawned when a base takes damage. Set to `0` to disable. | `2` |

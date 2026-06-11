@@ -256,6 +256,18 @@ function attackBase(blob, base) {
       base.hp -= blob.size * 0.5;
       blob.combatCooldown = config.baseCombatCooldown || 30;
       events.push({ type: 'baseHit', x: base.x + rand(-20, 20), y: base.y + rand(-20, 20), team: base.team });
+      // Spawn defenders when base is hit
+      const defenseSpawns = config.baseDefenseSpawns || 0;
+      const teamCount = blobs.filter(b => b.alive && b.team === base.team).length;
+      for (let i = 0; i < defenseSpawns && teamCount + i < MAX_UNITS_PER_TEAM; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const r = BASE_RADIUS + 15;
+        blobs.push(createBlob(
+          base.x + Math.cos(angle) * r,
+          base.y + Math.sin(angle) * r,
+          BABY_SIZE, base.team
+        ));
+      }
       if (base.hp <= 0) {
         base.alive = false;
         events.push({ type: 'baseDestroyed', x: base.x, y: base.y, team: base.team });

@@ -4,5 +4,6 @@
   "groupBonusRadius": 80,
   "groupBonusMax": 2.0,
   "combatCooldown": 15,
-  "baseCombatCooldown": 30
+  "baseCombatCooldown": 30,
+  "baseDefenseSpawns": 2
 }
